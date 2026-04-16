@@ -96,7 +96,7 @@ def on_save_changed(path: str, overlay: OverlayWindow):
             tips.append({"text": f"Last pick: {short}  (skipped: {skipped})", "tone": "neutral"})
 
         # Score the last offered set so we can validate the pick
-        all_offered = [c["card"]["id"] for c in run_state.last_card_choices]
+        all_offered = [c["card"]["id"] for c in run_state.last_card_choices if c.get("card") and c["card"].get("id")]
         if all_offered:
             advice = score_card_reward(
                 offered_cards=all_offered,
@@ -122,7 +122,7 @@ def on_save_changed(path: str, overlay: OverlayWindow):
     # --- Path advice from real map data ---
     if run_state.next_nodes:
         node_scores = score_path_choices(
-            available_nodes=run_state.next_nodes,
+            available_nodes=[n.get("type", "unknown") for n in run_state.next_nodes if isinstance(n, dict)],
             hp=run_state.hp,
             max_hp=run_state.max_hp,
             gold=run_state.gold,

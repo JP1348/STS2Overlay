@@ -208,17 +208,20 @@ def parse_save_file(path: str) -> RunState:
     # --- Next available map nodes ---
     # Find current position (last visited coord) and look up its children
     visited = data.get("visited_map_coords", [])
-    if visited:
+    acts_list = data.get("acts") or []
+    act_index = state.act - 1
+    if visited and act_index < len(acts_list):
         current = visited[-1]
-        act_data = (data.get("acts") or [{}])[state.act - 1]
-        saved_map = act_data.get("saved_map", {})
+        act_data = acts_list[act_index] or {}
+        saved_map = act_data.get("saved_map") or {}
         # Build coord → node lookup
         coord_key = lambda c: (c.get("col"), c.get("row"))
-        nodes_by_coord = {coord_key(p["coord"]): p for p in saved_map.get("points", [])}
-        # Add boss node
-        boss = saved_map.get("boss")
-        if boss:
-            nodes_by_coord[coord_key(boss["coord"])] = boss
+        nodes_by_coord = {coord_key(p["coord"]): p for p in saved_map.get("points", []) if p.get("coord")}
+        # Add start and boss nodes
+        for special in ("start", "boss"):
+            node = saved_map.get(special)
+            if node and node.get("coord"):
+                nodes_by_coord[coord_key(node["coord"])] = node
         current_node = nodes_by_coord.get(coord_key(current))
         if current_node:
             state.next_nodes = [
