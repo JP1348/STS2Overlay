@@ -18,8 +18,12 @@ if errorlevel 1 (
 if not exist ".venv\Scripts\python.exe" (
     echo Setting up virtual environment for first run...
     python -m venv .venv
-    if errorlevel 1 (
+    if not exist ".venv\Scripts\python.exe" (
         echo ERROR: Failed to create virtual environment.
+        echo Make sure Python 3.10+ is installed from https://python.org
+        echo and that "Add Python to PATH" was ticked during install.
+        echo Also disable the Microsoft Store Python alias in:
+        echo   Settings ^> Apps ^> Advanced app settings ^> App execution aliases
         pause
         exit /b 1
     )
