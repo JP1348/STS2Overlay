@@ -36,8 +36,8 @@ if not exist ".venv\Scripts\python.exe" (
     echo Setup complete.
 )
 
-:: Launch overlay (auto-detects save directory)
-.venv\Scripts\python main.py %*
+:: Launch overlay
+.venv\Scripts\python main.py --save-dir "C:\Users\John\AppData\Roaming\SlayTheSpire2\steam\76561197979082210\profile1\saves" %*
 if errorlevel 1 (
     echo.
     echo Overlay exited with an error. See above for details.
