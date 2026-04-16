@@ -63,8 +63,9 @@ class SaveFileWatcher:
             return self.save_path
         if self.save_path.is_dir():
             # STS2 uses .save files. Exclude known non-run files.
-            excluded = {"progress.save", "settings.save",
-                        "progress.save.backup", "settings.save.backup"}
+            excluded = {"progress.save", "settings.save", "prefs.save",
+                        "progress.save.backup", "settings.save.backup",
+                        "prefs.save.backup"}
             saves = [
                 f for f in self.save_path.glob("**/*.save")
                 if f.name not in excluded

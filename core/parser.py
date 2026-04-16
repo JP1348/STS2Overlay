@@ -142,8 +142,10 @@ def parse_run_history(path: str) -> RunState:
 def parse_save_file(path: str) -> RunState:
     """
     Load and parse an STS2 active run save file into a RunState object.
-    Field names confirmed from .run history analysis; active save uses same schema.
-    Falls back gracefully if any field is missing.
+    Confirmed field layout from real current_run.save (schema_version 14):
+      - Top-level: ascension, current_act_index, rng.seed, map_point_history
+      - Player data under players[0]: character_id, current_hp, max_hp, gold,
+        deck (list of {id, ...}), relics (list of {id, ...})
     """
     # .run history files — parse differently
     if path.endswith(".run") or path.endswith(".run.backup"):
@@ -158,31 +160,27 @@ def parse_save_file(path: str) -> RunState:
 
     state = RunState(raw=data)
 
-    # --- Confirmed from STS2 .run data / likely same in active save ---
+    # --- Top-level fields ---
     state.ascension = data.get("ascension", 0)
+    state.act       = data.get("current_act_index", 0) + 1
+    state.seed      = str(data.get("rng", {}).get("seed", "UNKNOWN"))
 
-    # --- These will be confirmed once we see an active mid-run save ---
-    state.seed      = str(data.get("seed", "UNKNOWN"))
-    state.floor     = data.get("floor", data.get("floor_num", 0))
-    state.act       = data.get("act",   data.get("act_num",   1))
-    state.character = data.get("character", data.get("character_chosen", None))
-    state.hp        = data.get("current_hp",  data.get("hp", 0))
-    state.max_hp    = data.get("max_hp", 0)
-    state.gold      = data.get("current_gold", data.get("gold", 0))
+    # Floor = total map points visited across all acts
+    state.floor = sum(len(act) for act in data.get("map_point_history", []))
 
-    # --- Relics: STS2 uses "RELIC.ID" string format ---
-    relics_raw = data.get("relics", [])
-    if relics_raw and isinstance(relics_raw[0], dict):
-        state.relics = [r.get("id", r.get("choice", str(r))) for r in relics_raw]
-    else:
-        state.relics = [str(r) for r in relics_raw]
+    # --- Player data (take first player) ---
+    player = (data.get("players") or [{}])[0]
 
-    # --- Deck: STS2 uses "CARD.ID" string format ---
-    deck_raw = data.get("cards", data.get("deck", []))
-    if deck_raw and isinstance(deck_raw[0], dict):
-        state.deck = [c.get("id", str(c)) for c in deck_raw]
-    else:
-        state.deck = [str(c) for c in deck_raw]
+    state.character = player.get("character_id")
+    state.hp        = player.get("current_hp", 0)
+    state.max_hp    = player.get("max_hp", 0)
+    state.gold      = player.get("gold", 0)
+
+    # Relics: list of {"id": "RELIC.X", ...}
+    state.relics = [r["id"] for r in player.get("relics", []) if "id" in r]
+
+    # Deck: list of {"id": "CARD.X", ...}
+    state.deck = [c["id"] for c in player.get("deck", []) if "id" in c]
 
     return state
 
