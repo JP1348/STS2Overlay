@@ -93,75 +93,84 @@ def on_save_changed(path: str, overlay: OverlayWindow):
     overlay.update_run_info(run_state)
 
     # -------------------------------------------------------------------
-    # Advisor scoring
-    # In a real implementation, the save file would include the card
-    # reward options currently on screen. Until we confirm STS2 save
-    # format, we score the full deck for archetype detection and show
-    # a readiness summary.
+    # Advisor tips
+    # STS2 save format confirmed: card_choices are written to history
+    # AFTER the player picks — so we cannot show offered cards before pick.
+    # Instead we show:
+    #   • Last pick retrospective (what was offered and chosen)
+    #   • Deck composition / archetype analysis
+    #   • Path advice from actual map data
     # -------------------------------------------------------------------
-    offered = run_state.raw.get("card_choice", {}).get("cards", [])  # VERIFY field name
+    archetype = detect_archetype(run_state.deck, run_state.relics)
+    tips = []
 
-    if offered:
-        advice = score_card_reward(
-            offered_cards=offered,
-            deck=run_state.deck,
-            relics=run_state.relics,
+    # --- Reward screen notice ---
+    if run_state.is_on_reward_screen:
+        tips.append({"text": "Reward screen — pick a card!", "tone": "neutral"})
+
+    # --- Last card choice retrospective ---
+    if run_state.last_card_choices:
+        picked = next((c["card"]["id"] for c in run_state.last_card_choices if c.get("was_picked")), None)
+        others = [c["card"]["id"] for c in run_state.last_card_choices if not c.get("was_picked")]
+        if picked:
+            short = picked.replace("CARD.", "")
+            skipped = ", ".join(c.replace("CARD.", "") for c in others)
+            tips.append({"text": f"Last pick: {short}  (skipped: {skipped})", "tone": "neutral"})
+
+        # Score the last offered set so we can validate the pick
+        all_offered = [c["card"]["id"] for c in run_state.last_card_choices]
+        if all_offered:
+            advice = score_card_reward(
+                offered_cards=all_offered,
+                deck=run_state.deck,
+                relics=run_state.relics,
+                hp=run_state.hp,
+                max_hp=run_state.max_hp,
+                floor=run_state.floor,
+                ascension=run_state.ascension,
+            )
+            _run_card_picks.append({
+                "floor":   run_state.floor,
+                "offered": all_offered,
+                "chosen":  picked,
+            })
+            tips += advice.as_tips()
+
+    # --- Deck summary ---
+    tips.append({"text": f"Build: {archetype or 'unclear'}  |  {len(run_state.deck)} cards  |  {len(run_state.relics)} relics", "tone": "neutral"})
+    if len(run_state.deck) > 20:
+        tips.append({"text": "Deck is large — consider skipping next reward", "tone": "warn"})
+
+    # --- Path advice from real map data ---
+    if run_state.next_nodes:
+        node_scores = score_path_choices(
+            available_nodes=run_state.next_nodes,
             hp=run_state.hp,
             max_hp=run_state.max_hp,
+            gold=run_state.gold,
             floor=run_state.floor,
+            act=run_state.act,
+            relic_count=len(run_state.relics),
+            deck_size=len(run_state.deck),
             ascension=run_state.ascension,
         )
-        # Record this pick event so it can be submitted with the run
-        _run_card_picks.append({
-            "floor":   run_state.floor,
-            "offered": offered,
-            "chosen":  None,  # updated if we detect a pick — VERIFY
-        })
-        local_tips = advice.as_tips()
-        overlay.update_advice(local_tips)
-        # Fetch community seed intel in background — injects above local tips when ready
-        _fetch_seed_intel_async(
-            run_state.seed, run_state.character, run_state.floor,
-            overlay, local_tips,
-        )
+        tips += path_tips(node_scores)
     else:
-        # No active card choice — show deck summary + path advice + ascension context
-        archetype = detect_archetype(run_state.deck, run_state.relics)
-        tips = [
-            {"text": f"Detected build: {archetype or 'unclear'}", "tone": "neutral"},
-            {"text": f"Deck: {len(run_state.deck)} cards  |  Relics: {len(run_state.relics)}", "tone": "neutral"},
-        ]
-        if len(run_state.deck) > 20:
-            tips.append({"text": "Deck is getting large — consider skipping next reward", "tone": "warn"})
+        hp_pct = round(run_state.hp / run_state.max_hp * 100) if run_state.max_hp else 0
+        if hp_pct <= 30:
+            tips.append({"text": f"HP critical ({hp_pct}%) — prioritise rest site", "tone": "warn"})
+        elif hp_pct <= 50:
+            tips.append({"text": f"HP low ({hp_pct}%) — avoid elites if possible", "tone": "warn"})
+        elif run_state.gold >= 150:
+            tips.append({"text": f"High gold ({run_state.gold}g) — shop path worth considering", "tone": "good"})
 
-        # Path advice — shown between floors
-        available_nodes = run_state.raw.get("available_nodes",  # VERIFY field name
-                          run_state.raw.get("next_nodes", []))
-        if available_nodes:
-            node_scores = score_path_choices(
-                available_nodes = available_nodes,
-                hp              = run_state.hp,
-                max_hp          = run_state.max_hp,
-                gold            = run_state.gold,
-                floor           = run_state.floor,
-                act             = run_state.act,
-                relic_count     = len(run_state.relics),
-                deck_size       = len(run_state.deck),
-                ascension       = run_state.ascension,
-            )
-            tips += path_tips(node_scores)
-        else:
-            # No map data yet — show generic path heuristic based on current state
-            hp_pct = round(run_state.hp / run_state.max_hp * 100) if run_state.max_hp else 0
-            if hp_pct <= 30:
-                tips.append({"text": f"HP critical ({hp_pct}%) — prioritise rest site over elite", "tone": "warn"})
-            elif hp_pct <= 50:
-                tips.append({"text": f"HP low ({hp_pct}%) — avoid elites if rest site available", "tone": "warn"})
-            elif run_state.gold >= 150:
-                tips.append({"text": f"High gold ({run_state.gold}g) — shop path worth considering", "tone": "good"})
-
-        tips += ascension_context_tips(run_state.ascension)
-        overlay.update_advice(tips)
+    tips += ascension_context_tips(run_state.ascension)
+    local_tips = tips
+    overlay.update_advice(local_tips)
+    _fetch_seed_intel_async(
+        run_state.seed, run_state.character, run_state.floor,
+        overlay, local_tips,
+    )
 
 
 def _fetch_seed_intel_async(

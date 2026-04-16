@@ -55,7 +55,7 @@ class SaveFileWatcher:
                         self.on_change(str(target))
             except Exception as e:
                 print(f"[Watcher] Error: {e}")
-            time.sleep(1.5)  # poll every 1.5 seconds
+            time.sleep(0.4)  # poll every 0.4 seconds
 
     def _resolve_target(self) -> Path:
         """If given a directory, find the most recently modified active run .save file."""

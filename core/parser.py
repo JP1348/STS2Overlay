@@ -35,6 +35,10 @@ class RunState:
     act: int = 1
     ascension: int = 0
     game_mode: str = "standard"
+    # Fields confirmed from real STS2 save data
+    is_on_reward_screen: bool = False   # pre_finished_room.is_pre_finished
+    last_card_choices: List[dict] = field(default_factory=list)  # most recent card_choices
+    next_nodes: List[dict] = field(default_factory=list)  # available next map nodes
     raw: dict = field(default_factory=dict)
 
     def __str__(self):
@@ -181,6 +185,47 @@ def parse_save_file(path: str) -> RunState:
 
     # Deck: list of {"id": "CARD.X", ...}
     state.deck = [c["id"] for c in player.get("deck", []) if "id" in c]
+
+    # --- Reward screen state ---
+    pre = data.get("pre_finished_room", {})
+    state.is_on_reward_screen = bool(pre.get("is_pre_finished", False))
+
+    # --- Most recent card choices from history ---
+    # Walk map_point_history in reverse to find the last floor that has card_choices
+    state.last_card_choices = []
+    for act_floors in reversed(data.get("map_point_history", [])):
+        for map_point in reversed(act_floors):
+            for ps in map_point.get("player_stats", []):
+                choices = ps.get("card_choices", [])
+                if choices:
+                    state.last_card_choices = choices
+                    break
+            if state.last_card_choices:
+                break
+        if state.last_card_choices:
+            break
+
+    # --- Next available map nodes ---
+    # Find current position (last visited coord) and look up its children
+    visited = data.get("visited_map_coords", [])
+    if visited:
+        current = visited[-1]
+        act_data = (data.get("acts") or [{}])[state.act - 1]
+        saved_map = act_data.get("saved_map", {})
+        # Build coord → node lookup
+        coord_key = lambda c: (c.get("col"), c.get("row"))
+        nodes_by_coord = {coord_key(p["coord"]): p for p in saved_map.get("points", [])}
+        # Add boss node
+        boss = saved_map.get("boss")
+        if boss:
+            nodes_by_coord[coord_key(boss["coord"])] = boss
+        current_node = nodes_by_coord.get(coord_key(current))
+        if current_node:
+            state.next_nodes = [
+                nodes_by_coord[coord_key(child)]
+                for child in current_node.get("children", [])
+                if coord_key(child) in nodes_by_coord
+            ]
 
     return state
 
