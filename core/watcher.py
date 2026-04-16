@@ -7,6 +7,7 @@ when the autosave file is updated (i.e., the player advanced a floor).
 import os
 import time
 import threading
+import traceback
 from pathlib import Path
 
 
@@ -55,6 +56,7 @@ class SaveFileWatcher:
                         self.on_change(str(target))
             except Exception as e:
                 print(f"[Watcher] Error: {e}")
+                traceback.print_exc()
             time.sleep(0.4)  # poll every 0.4 seconds
 
     def _resolve_target(self) -> Path:
