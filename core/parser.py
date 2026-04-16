@@ -187,7 +187,7 @@ def parse_save_file(path: str) -> RunState:
     state.deck = [c["id"] for c in player.get("deck", []) if "id" in c]
 
     # --- Reward screen state ---
-    pre = data.get("pre_finished_room", {})
+    pre = data.get("pre_finished_room") or {}
     state.is_on_reward_screen = bool(pre.get("is_pre_finished", False))
 
     # --- Most recent card choices from history ---
