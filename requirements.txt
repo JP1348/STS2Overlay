@@ -1,0 +1,4 @@
+watchdog>=4.0.0
+tkinter-tooltip>=2.1.0
+# PyJWT not needed — stdlib urllib handles all API calls (no extra deps for client)
+
