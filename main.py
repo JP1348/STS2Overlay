@@ -13,9 +13,7 @@ On Linux (Steam/Proton), find your save dir by running:
 """
 
 import sys
-import os
 import argparse
-import subprocess
 import threading
 
 from core.watcher      import SaveFileWatcher
@@ -29,26 +27,6 @@ from ui.login_dialog   import LoginDialog
 
 # Shared API client — one instance for the whole process
 _api = ApiClient()
-
-# Steam App ID for Slay the Spire 2
-STS2_APP_ID = "1141290"
-
-
-def launch_game() -> None:
-    """Launch STS2 via Steam if it is not already running."""
-    try:
-        if sys.platform == "win32":
-            os.startfile(f"steam://rungameid/{STS2_APP_ID}")
-        else:
-            # Linux / macOS — try the steam CLI first, fall back to xdg-open
-            steam_cmd = ["steam", f"steam://rungameid/{STS2_APP_ID}"]
-            try:
-                subprocess.Popen(steam_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except FileNotFoundError:
-                subprocess.Popen(["xdg-open", f"steam://rungameid/{STS2_APP_ID}"],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception as e:
-        print(f"[Main] Could not launch STS2: {e}")
 
 # Track the last seen run floor so we can detect a run ending (floor resets to 0/1)
 _last_floor: int = 0
@@ -223,15 +201,7 @@ def main():
         default="",
         help="Path to STS2 save directory or autosave file"
     )
-    parser.add_argument(
-        "--no-launch",
-        action="store_true",
-        help="Don't launch STS2 via Steam (use if the game is already running)"
-    )
     args = parser.parse_args()
-
-    if not args.no_launch:
-        launch_game()
 
     overlay = OverlayWindow()
 
